@@ -60,10 +60,28 @@
        <!-- <button onclick="publishMessage()" class="btn btn-warning btn-block">Send</button> -->
        <button id="sendMqttBtn" onclick="publishMessage()" class="btn btn-warning btn-block" disabled>Send</button>
 
+       <h4>MQTT Counting</h4>
+       <input type="text" id="interval" placeholder="Enter interval" class="form-control mb-2">
+       <button id="sendInterval" onclick="interval()" class="btn btn-warning btn-block" disabled>Set_Interval</button>
+       <button id = "count" onclick = "counting()" class = "btn btn-warning btn-block"disabled>Count</button>
+       <button id="reset" onclick="resetCounting()" class="btn btn-warning btn-block" disabled>Reset</button>
+       <button id="pause" onclick="pause()" class="btn btn-warning btn-block" disabled>Pause</button>
+       <h4>Giao tiếp BLE (UUID & Nội dung)</h4>
+       <div id="bleExchangeDisplay" style="
+           background-color: #fff;
+           color: #000;
+           border: 1px solid #ccc;
+           border-radius: 8px;
+           padding: 10px;
+           height: 100px;
+           overflow-y: auto;
+           font-family: monospace;
+           font-size: 13px;
+       "></div>
        
-
         <h4>Terminal</h4>
         <textarea id="textareaNotification" readonly></textarea>
+
     </div>
 
     <script> // hoạt động của WEB BLE 
@@ -94,27 +112,38 @@
 
     // Kết nối MQTT WebSocket
     var mqttClient = mqtt.connect('ws://192.168.1.34:9001');
+    // Khi kết nối MQTT thành công
+        mqttClient.on("connect", function () {
+            clearLog();  // Xóa log khi kết nối lại
+            log("Connected to MQTT Broker");
 
-    mqttClient.on("connect", function () {
-        clearLog();  // Xóa log khi kết nối lại
-        log("Connected to MQTT Broker");
-        // bật nút gửi khi kết nối mqtt broker thành công 
-        document.getElementById("sendMqttBtn").disabled = false;
-        // bật nút kết nối WiFi khi kết nối BLE thành công
-        document.getElementById("connectWifiBtn").disabled = false;
-    });
+            // Bật nút gửi MQTT khi kết nối thành công
+            document.getElementById("sendMqttBtn").disabled = false;
 
-    mqttClient.on("close", function () {
-        log("Disconnected from MQTT Broker");
-        // Vô hiệu hóa nút "Send" khi mất kết nối MQTT
-        document.getElementById("sendMqttBtn").disabled = true;
-    });
+            // Bật nút kết nối WiFi khi kết nối BLE thành công
+            document.getElementById("connectWifiBtn").disabled = false;
+        });
+
+        // Khi mất kết nối MQTT
+        mqttClient.on("close", function () {
+            log("Disconnected from MQTT Broker. Reconnecting...");
+            // Thử kết nối lại sau 2 giây
+            setTimeout(() => {
+                mqttClient.reconnect();
+            }, 500);
+        });
+
+        // Nếu gặp lỗi khi kết nối
+        mqttClient.on("error", function (err) {
+            log("MQTT Error: " + err.message);
+        });
+
     
         function toggleFunction() {
             const button = document.getElementById("toggleButton");
 
             if (!dev) {  
-                // Trường hợp ban đầu hoặc khi bị ngắt kết nối → quét lại thiết bị
+                // Trường hợp ban đầu hoặc khi bị ngắt kết nối -> quét lại thiết bị
                 button.innerText = "DISCONNECT";
                 requestBluetoothDevice();
             } else if (dev && dev.gatt.connected) {  
@@ -127,15 +156,22 @@
                 requestBluetoothDevice();
             }
         }
+        function logBLE(uuid, direction, content) {
+            const div = document.getElementById("bleExchangeDisplay");
+            const p = document.createElement("p");
+            const timestamp = new Date().toLocaleTimeString();
 
-    
+            p.innerHTML = `[${timestamp}] <strong>${direction}</strong> | <span style="color:blue">${uuid}</span> : ${content}`;
+            div.appendChild(p);
+            div.scrollTop = div.scrollHeight;
+            }
         function handleNotifications(event) {
     // Chuyển đổi dữ liệu từ dạng binary (ArrayBuffer) thành chuỗi văn bản
     let receivedData = new TextDecoder().decode(event.target.value);
     
     // Hiển thị dữ liệu nhận được trên terminal
     log("📡 Received from ESP32: " + receivedData);  
-
+    logBLE("6e400003-b5a3-f393-e0a9-e50e24dcca9e","Receive",`${receivedData}`);
     // Kiểm tra chuỗi nhận được và mở các nút tương ứng
     if (receivedData.includes("Wifi is connected")) {
         log("✅ WiFi connected! Enabling MQTT configuration...");
@@ -143,6 +179,11 @@
     } else if (receivedData.includes("MQTT is connected")) {
         log("✅ MQTT connected! Enabling message publishing...");
         document.getElementById("sendMqttBtn").disabled = false;
+        document.getElementById("sendInterval").disabled = false;
+        document.getElementById("count").disabled = false;
+        document.getElementById("reset").disabled = false;
+        document.getElementById("pause").disabled = false;
+
     } else {
         log("ESP32 says: " + receivedData);
     }
@@ -203,6 +244,7 @@
                 wifiCharacteristic.writeValue(data)  // gửi dữ liệu wifi dưới dạng định danh : WIFI:___:___
                     .then(() => log("WiFi credentials sent successfully"))
                     .catch(error => log("WiFi send error: " + error));
+                    logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`WIFI:${ssid};${pass}`);
             } else { // nếu chưa có ssid và pass thì thông báo nhập lại trên terminal 
                 log("Please enter both SSID and Password!");
             }
@@ -219,6 +261,7 @@
                 MQTTCharacteristic.writeValue(data)
                     .then(() => log ("MQTT Broker credentials sent successfull !"))
                     .catch(error => log("MQTT Broker data sent error: "+ error));
+                logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`MQTTdata:${user};${pass}`);
             }
             else {
                 // nếu chưa có gì trong ô nhập liệu thì thông báo trên terminal 
@@ -239,6 +282,8 @@
                 MQTTCharacteristic.writeValue(data) // gửi dữ liệu MQTT  với định dạng MQTT:__;___
                     .then(() => log("📧 Topic & Message sent successfully"))
                     .catch(error => log("Send error: " + error));
+                logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`MQTT:${topic};${message}`);
+
             } else {
                 log("Please enter both Topic and Message!");
             }
@@ -254,25 +299,6 @@
             document.getElementById("connectMqttBtn").disabled = !(broker && password &&  dev && dev.gatt.connected);
             }
 
-    
-        // mqttClient.on("connect", function () {
-        //     log("Connected to MQTT Broker");
-        //     // bật nút send khi kết nối mqtt broker thành công 
-        //     document.getElementById("sendMqttBtn").disabled = false;
-        //     // khi kết nối BLE thành công thì mới mở nút 
-        //     document.getElementById("connectWifiBtn").disabled = false;
-
-        // });
-        // mqttClient.on("close", function () {
-        //     log("Disconnected from MQTT Broker");
-
-        //     // Vô hiệu hóa nút "Send" khi mất kết nối MQTT
-        //     document.getElementById("sendMqttBtn").disabled = true;
-        // });
-
-        // // function log(text) {
-        // //     document.getElementById("textareaNotification").value += text + "\n";
-        // // }
         function onDisconnected() {
             log("BLE Disconnected! Please RESCAN.");
             document.getElementById("toggleButton").innerText = "RESCAN";
@@ -280,6 +306,44 @@
             document.getElementById("connectMqttBtn").disabled = true;
             document.getElementById("sendMqttBtn").disabled = true;
             dev = null; // Xóa trạng thái thiết bị
+        }
+                // Gửi thời gian interval cho ESP32 (đơn vị tùy ESP32 xử lý, ví dụ ms hoặc giây)
+        function interval() {
+            let intervalValue = document.getElementById("interval").value;
+            if (!intervalValue) {
+                log("❗ Please enter an interval value.");
+                return;
+            }
+            let command = new TextEncoder().encode("Count:setTime;" + intervalValue);
+            MQTTCharacteristic.writeValue(command)
+                .then(() => log("⏱️ Interval sent to ESP32: " + intervalValue))
+                .catch(error => log("Error sending interval: " + error));
+            logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`Count:setTime;${intervalValue}`);
+        }
+
+        // Gửi lệnh bắt đầu hoặc tiếp tục đếm
+        function counting() {
+            let command = new TextEncoder().encode("Count:start");
+            MQTTCharacteristic.writeValue(command)
+                .then(() => log("▶️ Counting started"))
+                .catch(error => log("Error starting count: " + error));
+            logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send","Count:start");
+        }
+
+        // Gửi lệnh reset bộ đếm
+        function resetCounting() {
+            let command = new TextEncoder().encode("Count:reset");
+            MQTTCharacteristic.writeValue(command)
+                .then(() => log("🔄 Count reset sent"))
+                .catch(error => log("Error sending reset command: " + error));
+            logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send","Count:reset");
+        }
+        function pause(){
+            let command = new TextEncoder().encode("Count:pause");
+            MQTTCharacteristic.writeValue(command)
+            .then(() => log("▶️ Stop counting !!!"))
+            .catch(error => log("Error sending reset command: " + error));
+            logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send","Count:pause");
         }
     </script>
     
