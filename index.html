@@ -33,6 +33,23 @@
             border: none;
             padding: 10px;
         }
+        /* Style cho dropdown */
+        select {
+            width: 100%;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        .wifi-strength {
+            display: inline-block;
+            width: 20px;
+            margin-right: 8px;
+        }
+        .security-icon {
+            margin-left: 8px;
+            font-size: 14px;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
 </head>
@@ -40,9 +57,13 @@
     <div class="container">
         <h1 class="text-center">BLE & MQTT Config</h1>
         <button class="btn btn-primary btn-block" id="toggleButton" onclick="toggleFunction()">SCAN</button>
-
+        
         <h4>WiFi Configuration</h4>
-        <input type="text" id="SSID" placeholder="Enter SSID" class="form-control mb-2">
+        <button class="btn btn-info btn-block" id="scanWifiBtn" onclick="scanWifi()">Scan WiFi Networks</button>
+        <!-- Đổi input thành select dropdown -->
+        <select id="SSID" class="form-control mb-2">
+            <option value="">-- Select WiFi Network --</option>
+        </select>
         <input type="password" id="Password" placeholder="Enter Password" class="form-control mb-2">
         <!-- Nút "Kết nối" ban đầu bị vô hiệu hóa (disabled) -->
         <button id="connectWifiBtn" onclick="ConnectWifi()" class="btn btn-success btn-block" disabled>Connect</button> 
@@ -66,7 +87,7 @@
        <button id = "count" onclick = "counting()" class = "btn btn-warning btn-block"disabled>Count</button>
        <button id="reset" onclick="resetCounting()" class="btn btn-warning btn-block" disabled>Reset</button>
        <button id="pause" onclick="pause()" class="btn btn-warning btn-block" disabled>Pause</button>
-       <h4>Giao tiếp BLE (UUID & Nội dung)</h4>
+       <h4>Interaction WebBLE & ESP32</h4>
        <div id="bleExchangeDisplay" style="
            background-color: #fff;
            color: #000;
@@ -81,8 +102,8 @@
        
         <h4>Terminal</h4>
         <textarea id="textareaNotification" readonly></textarea>
-
     </div>
+
 
     <script> // hoạt động của WEB BLE 
         var deviceName = 'BLE_Wifi';  // tên thiết bị kết nối ble 
@@ -100,19 +121,22 @@
         // Kết nối MQTT WebSocket
         var mqttClient = mqtt.connect('ws://192.168.1.34:9001');
 
-            // Hàm log hiện tại
-    function log(text) {
-        document.getElementById("textareaNotification").value += text + "\n";
-    }
-    
-    // Hàm xóa log
-    function clearLog() {
-        document.getElementById("textareaNotification").value = "";
-    }
+        // Hàm log hiện tại
+        function log(text) {
+            const textarea = document.getElementById("textareaNotification");
+            textarea.value += text + "\n";
+            textarea.scrollTop = textarea.scrollHeight; // cuộn xuống dòng mới nhất
+        }
 
-    // Kết nối MQTT WebSocket
-    var mqttClient = mqtt.connect('ws://192.168.1.34:9001');
-    // Khi kết nối MQTT thành công
+
+        // Hàm xóa log
+        function clearLog() {
+            document.getElementById("textareaNotification").value = "";
+        }
+
+        // Kết nối MQTT WebSocket
+        var mqttClient = mqtt.connect('ws://192.168.1.34:9001');
+        // Khi kết nối MQTT thành công
         mqttClient.on("connect", function () {
             clearLog();  // Xóa log khi kết nối lại
             log("Connected to MQTT Broker");
@@ -137,8 +161,85 @@
         mqttClient.on("error", function (err) {
             log("MQTT Error: " + err.message);
         });
+        
+        // Hàm phân tích chuỗi WiFi từ ESP32
+        function parseWifiNetworks(wifiString) {
+            const networks = [];
 
-    
+            // Mỗi mạng WiFi được ngăn cách bởi dấu |
+            const entries = wifiString.split("|");
+
+            entries.forEach(entry => {
+                // Mỗi thông tin trong mạng (SSID, Signal, Security) ngăn cách bằng dấu ;
+                const parts = entry.split(";");
+
+                if (parts.length === 3) {
+                    const ssid = parts[0];
+                    const signal = parseInt(parts[1]);
+                    const security = parts[2];
+
+                    networks.push({
+                        ssid: ssid,
+                        signal: signal,
+                        security: security
+                    });
+                }
+            });
+
+            // Sắp xếp theo cường độ tín hiệu giảm dần (signal lớn hơn tức là mạnh hơn)
+            networks.sort((a, b) => b.signal - a.signal);
+
+            return networks;
+        }
+
+        // Hàm để điền danh sách WiFi vào dropdown
+        function populateWifiDropdown(networks) {
+            const dropdown = document.getElementById("SSID");
+
+            while (dropdown.options.length > 1) {
+                dropdown.remove(1);
+            }
+
+            networks.forEach(network => {
+                const option = document.createElement("option");
+
+                // Giá trị thực sự chỉ là SSID
+                option.value = network.ssid;
+
+                let signalStrength = "";
+                if (network.signal > -50) signalStrength = "▮▮▮▮";
+                else if (network.signal > -60) signalStrength = "▮▮▮▯";
+                else if (network.signal > -70) signalStrength = "▮▮▯▯";
+                else if (network.signal > -80) signalStrength = "▮▯▯▯";
+                else signalStrength = "▯▯▯▯";
+
+                let securityIcon = network.security === "SECURED" ? "🔒" : "🔓";
+
+                // Hiển thị đầy đủ để người dùng chọn
+                option.text = `${network.ssid}`;
+                dropdown.add(option);
+            });
+        }
+
+        
+        // Hàm quét WiFi từ thiết bị - có thể gửi lệnh qua BLE hoặc mô phỏng với dữ liệu mẫu
+        function scanWifi() {
+            if (!dev || !dev.gatt.connected) {
+                log("❌ BLE not connected. Please connect to BLE device first!");
+                return;
+            }
+            
+            log("🔍 Scanning for WiFi networks...");
+            
+        // gửi lệnh qua BLE để ESP32 quét WiFi
+            wifiCharacteristic.writeValue(new TextEncoder().encode("SCAN_WIFI"))
+               .then(() => log("Sent WiFi scan command to ESP32"))
+               .catch(error => log("Error sending WiFi scan command: " + error));
+               logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send","SCAN_WIFI");
+
+        }
+        
+
         function toggleFunction() {
             const button = document.getElementById("toggleButton");
 
@@ -165,58 +266,69 @@
             div.appendChild(p);
             div.scrollTop = div.scrollHeight;
             }
-        function handleNotifications(event) {
-    // Chuyển đổi dữ liệu từ dạng binary (ArrayBuffer) thành chuỗi văn bản
-    let receivedData = new TextDecoder().decode(event.target.value);
-    
-    // Hiển thị dữ liệu nhận được trên terminal
-    log("📡 Received from ESP32: " + receivedData);  
-    logBLE("6e400003-b5a3-f393-e0a9-e50e24dcca9e","Receive",`${receivedData}`);
-    // Kiểm tra chuỗi nhận được và mở các nút tương ứng
-    if (receivedData.includes("Wifi is connected")) {
-        log("✅ WiFi connected! Enabling MQTT configuration...");
-        document.getElementById("connectMqttBtn").disabled = false;
-    } else if (receivedData.includes("MQTT is connected")) {
-        log("✅ MQTT connected! Enabling message publishing...");
-        document.getElementById("sendMqttBtn").disabled = false;
-        document.getElementById("sendInterval").disabled = false;
-        document.getElementById("count").disabled = false;
-        document.getElementById("reset").disabled = false;
-        document.getElementById("pause").disabled = false;
-
-    } else {
-        log("ESP32 says: " + receivedData);
-    }
-}
+        function handleNotifications(event) {  // hàm nhận và phải hồi dữ liệu tới Web từ ESP
+            // Chuyển đổi dữ liệu từ dạng binary (ArrayBuffer) thành chuỗi văn bản
+            let receivedData = new TextDecoder().decode(event.target.value);
+            
+            // Hiển thị dữ liệu nhận được trên terminal
+            log("📡 Received from ESP32: " + receivedData);  
+            logBLE("6e400003-b5a3-f393-e0a9-e50e24dcca9e","Receive",`${receivedData}`);
+        
+            if (receivedData.includes("WIFI_LIST:")) {
+                const wifiListData = receivedData.replace("WIFI_LIST:", "").trim();
+                const networks = parseWifiNetworks(wifiListData);
+                populateWifiDropdown(networks);
+                log(`📶 Found ${networks.length} WiFi networks`);
+            }
+            // Kiểm tra chuỗi nhận được và mở các nút tương ứng
+            else if (receivedData.includes("Wifi is connected")) {
+                log("✅ WiFi connected! Enabling MQTT configuration...");
+                document.getElementById("connectMqttBtn").disabled = false;
+            } else if (receivedData.includes("MQTT is connected")) {
+                log("✅ MQTT connected! Enabling message publishing...");
+                document.getElementById("sendMqttBtn").disabled = false;
+                document.getElementById("sendInterval").disabled = false;
+                document.getElementById("count").disabled = false;
+                document.getElementById("reset").disabled = false;
+                document.getElementById("pause").disabled = false;
+            } else {
+                log("ESP32 says: " + receivedData);
+            }
+        }
 
         function requestBluetoothDevice() {
-    navigator.bluetooth.requestDevice({
-        filters: [{ name: deviceName }],
-                    optionalServices: [bleService]
+            navigator.bluetooth.requestDevice({
+                filters: [{ name: deviceName }],
+                optionalServices: [bleService]
+            })
+            .then(device => {
+                    dev = device; // ✅ Gán thiết bị BLE vào biến dev
+                    return device.gatt.connect();
                 })
-                .then(device => {
-                        dev = device; // ✅ Gán thiết bị BLE vào biến dev
-                        return device.gatt.connect();
-                    })
-                .then(server => server.getPrimaryService(bleService))
-                .then(service => {
-                    return Promise.all([
-                        service.getCharacteristic(wifiCharacteristicUUID).then(char => wifiCharacteristic = char),
-                        service.getCharacteristic(MQTTCharacteristicUUID).then(char => MQTTCharacteristic = char),
-                        service.getCharacteristic(notifyCharacteristicUUID).then(char => notifyCharacteristic = char) // Lấy characteristic nhận dữ liệu
-                    ]);
-                })
-                .then(() => {
-                    log("BLE connected! Listening for notifications...");
-                    notifyCharacteristic.startNotifications().then(() => {
-                        notifyCharacteristic.addEventListener("characteristicvaluechanged", handleNotifications);  // Gọi handleNotifications khi có thay đổi giá trị
-                    });
-
-                    // Mở nút kết nối WiFi sau khi kết nối BLE thành công
-                    document.getElementById('connectWifiBtn').disabled = false;  // Mở nút kết nối WiFi
-                })
-                .catch(error => log("BLE Error: " + error));
-            }
+            .then(server => server.getPrimaryService(bleService))
+            .then(service => {
+                return Promise.all([
+                    service.getCharacteristic(wifiCharacteristicUUID).then(char => wifiCharacteristic = char),
+                    service.getCharacteristic(MQTTCharacteristicUUID).then(char => MQTTCharacteristic = char),
+                    service.getCharacteristic(notifyCharacteristicUUID).then(char => notifyCharacteristic = char) // Lấy characteristic nhận dữ liệu
+                ]);
+            })
+            .then(() => {
+                log("BLE connected! Listening for notifications...");
+                notifyCharacteristic.startNotifications().then(() => {
+                    notifyCharacteristic.addEventListener("characteristicvaluechanged", handleNotifications);  // Gọi handleNotifications khi có thay đổi giá trị
+                });
+                let confirm = new TextEncoder().encode("BLE is connected!");
+                MQTTCharacteristic.writeValue(confirm)
+                .then(() => log("Confirmed connected BLE with ESSP32 !!!"))
+                .catch(error => log("Error connecting BLE : " + error));
+                logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send","BLE is connected!");
+                // Mở nút kết nối WiFi sau khi kết nối BLE thành công
+                document.getElementById('connectWifiBtn').disabled = false;  // Mở nút kết nối WiFi
+                document.getElementById('scanWifiBtn').disabled = false;     // Mở nút quét WiFi
+            })
+            .catch(error => log("BLE Error: " + error));
+        }
 
     
         function disconnect() {
@@ -225,10 +337,11 @@
                 log("Disconnected from BLE");
             }
             dev = null;
-            //  Vô hiệu hóa nút "Kết nối" khi mất kết nối BLE
+            //  Vô hiệu hóa các nút khi mất kết nối BLE
             document.getElementById("connectWifiBtn").disabled = true; 
-            document.getElementById("connectMqttBtn").disabled = true ;
+            document.getElementById("connectMqttBtn").disabled = true;
             document.getElementById("sendMqttBtn").disabled = true;
+            document.getElementById("scanWifiBtn").disabled = true;
         }
     
         function ConnectWifi() {
@@ -239,12 +352,12 @@
             var ssid = document.getElementById("SSID").value;
             var password = document.getElementById("Password").value;
     
-            if (ssid && password) {
+            if (ssid) { // chỉ cần có SSID , pass có thể rỗng cũng được 
                 var data = new TextEncoder().encode("WIFI:"+ ssid + ";" + password);
                 wifiCharacteristic.writeValue(data)  // gửi dữ liệu wifi dưới dạng định danh : WIFI:___:___
                     .then(() => log("WiFi credentials sent successfully"))
                     .catch(error => log("WiFi send error: " + error));
-                    logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`WIFI:${ssid};${pass}`);
+                    logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`WIFI:${ssid};${password}`);
             } else { // nếu chưa có ssid và pass thì thông báo nhập lại trên terminal 
                 log("Please enter both SSID and Password!");
             }
@@ -261,7 +374,7 @@
                 MQTTCharacteristic.writeValue(data)
                     .then(() => log ("MQTT Broker credentials sent successfull !"))
                     .catch(error => log("MQTT Broker data sent error: "+ error));
-                logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`MQTTdata:${user};${pass}`);
+                logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`MQTTdata:${brokerAddress};${brokerPassword}`);
             }
             else {
                 // nếu chưa có gì trong ô nhập liệu thì thông báo trên terminal 
@@ -289,15 +402,15 @@
             }
         }
 
-            // Bật nút Connect MQTT khi nhập đủ thông tin
-            document.getElementById("brokerAddress").addEventListener("input", toggleMqttButton);
-            document.getElementById("brokerPassword").addEventListener("input", toggleMqttButton);
+        // Bật nút Connect MQTT khi nhập đủ thông tin
+        document.getElementById("brokerAddress").addEventListener("input", toggleMqttButton);
+        document.getElementById("brokerPassword").addEventListener("input", toggleMqttButton);
 
         function toggleMqttButton() {
             var broker = document.getElementById("brokerAddress").value;
             var password = document.getElementById("brokerPassword").value;
             document.getElementById("connectMqttBtn").disabled = !(broker && password &&  dev && dev.gatt.connected);
-            }
+        }
 
         function onDisconnected() {
             log("BLE Disconnected! Please RESCAN.");
@@ -305,9 +418,14 @@
             document.getElementById("connectWifiBtn").disabled = true; 
             document.getElementById("connectMqttBtn").disabled = true;
             document.getElementById("sendMqttBtn").disabled = true;
+            document.getElementById("scanWifiBtn").disabled = true;
             dev = null; // Xóa trạng thái thiết bị
         }
-                // Gửi thời gian interval cho ESP32 (đơn vị tùy ESP32 xử lý, ví dụ ms hoặc giây)
+
+
+
+                        
+        // Gửi thời gian interval cho ESP32 (đơn vị tùy ESP32 xử lý, ví dụ ms hoặc giây)
         function interval() {
             let intervalValue = document.getElementById("interval").value;
             if (!intervalValue) {
