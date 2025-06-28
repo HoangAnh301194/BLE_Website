@@ -50,8 +50,57 @@
             margin-left: 8px;
             font-size: 14px;
         }
+
+
+        .dropdown-custom {
+        position: relative;
+        width: 100%;
+        margin-bottom: 10px;
+        }
+
+        .selected {
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: white;
+        color: black;
+        cursor: pointer;
+        }
+
+        .dropdown-list {
+        position: absolute;
+        width: 100%;
+        background: rgb(255, 255, 255);
+        border: 1px solid #000000;
+        border-top: none;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 10;
+        }
+
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            cursor: pointer;
+            color: black; /* <-- thêm dòng này */
+        }
+
+        .dropdown-item:hover {
+            background-color: #f0f0f0;
+            color: black; /* <-- đảm bảo khi hover vẫn màu đen */
+        }
+
+        .dropdown-item img {
+        width: 20px;
+        height: 20px;
+        margin-right: 8px;
+        }
+
+
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+    
 </head>
 <body>
     <div class="container">
@@ -61,9 +110,19 @@
         <h4>WiFi Configuration</h4>
         <button class="btn btn-info btn-block" id="scanWifiBtn" onclick="scanWifi()">Scan WiFi Networks</button>
         <!-- Đổi input thành select dropdown -->
-        <select id="SSID" class="form-control mb-2">
+        <!-- <select id="SSID" class="form-control mb-2">
             <option value="">-- Select WiFi Network --</option>
         </select>
+        <img id="signalIcon" src="" alt="Signal Icon" style="width: 24px; height: 24px; vertical-align: middle;" /> -->
+
+        <!-- Bỏ <select> cũ -->
+        <!-- Thay bằng dropdown tùy chỉnh -->
+        <div class="dropdown-custom">
+        <div id="selectedSSID" class="selected" onclick="toggleDropdown()">-- Select WiFi Network --</div>
+        <div id="wifiList" class="dropdown-list" style="display: none;"></div>
+        </div>
+        <input type="hidden" id="SSID" />
+
         <input type="password" id="Password" placeholder="Enter Password" class="form-control mb-2">
         <!-- Nút "Kết nối" ban đầu bị vô hiệu hóa (disabled) -->
         <button id="connectWifiBtn" onclick="ConnectWifi()" class="btn btn-success btn-block" disabled>Connect</button> 
@@ -102,6 +161,9 @@
        
         <h4>Terminal</h4>
         <textarea id="textareaNotification" readonly></textarea>
+        
+        
+
     </div>
 
 
@@ -113,11 +175,12 @@
         var RX ;
         var TX ; 
         var dev;
-    
+        let wifiBuffer = "";
+        let receivingWifiList = false;
         // Kết nối MQTT WebSocket
         var mqttClient = mqtt.connect('ws://192.168.1.34:9001');
 
-        // Hàm log hiện tại
+        // Hàm log hiển thị text trên ô terminal 
         function log(text) {
             const textarea = document.getElementById("textareaNotification");
             textarea.value += text + "\n";
@@ -188,36 +251,54 @@
             return networks;
         }
 
-        // Hàm để điền danh sách WiFi vào dropdown
-        function populateWifiDropdown(networks) {
-            const dropdown = document.getElementById("SSID");
-
-            while (dropdown.options.length > 1) {
-                dropdown.remove(1);
-            }
-
-            networks.forEach(network => {
-                const option = document.createElement("option");
-
-                // Giá trị thực sự chỉ là SSID
-                option.value = network.ssid;
-
-                let signalStrength = "";
-                if (network.signal > -50) signalStrength = "▮▮▮▮";
-                else if (network.signal > -60) signalStrength = "▮▮▮▯";
-                else if (network.signal > -70) signalStrength = "▮▮▯▯";
-                else if (network.signal > -80) signalStrength = "▮▯▯▯";
-                else signalStrength = "▯▯▯▯";
-
-                let securityIcon = network.security === "SECURED" ? "🔒" : "🔓";
-
-                // Hiển thị đầy đủ để người dùng chọn
-                option.text = `${network.ssid}`;
-                dropdown.add(option);
-            });
+        // Hàm trả về đường dẫn file PNG dựa trên cường độ tín hiệu
+        function getWifiSignalIcon(signal) {
+            if (signal > -40) return "excellent.png";
+            else if (signal > -60) return "good.png";
+            else if (signal > -80) return "medium.png";
+            else return "weak.png";
         }
 
-        
+
+        function populateWifiDropdown(networks) {
+            const list = document.getElementById("wifiList");
+            const selectedDisplay = document.getElementById("selectedSSID");
+            const hiddenInput = document.getElementById("SSID");
+            const signalIcon = document.getElementById("signalIcon");
+
+            list.innerHTML = ""; // Xóa danh sách cũ
+
+            networks.forEach(network => {
+                const item = document.createElement("div");
+                item.className = "dropdown-item";
+
+                const iconPath = "icons/" + getWifiSignalIcon(network.signal);
+                const securityIcon = network.security === "SECURED" ? "🔒" : "🔓";
+
+                item.innerHTML = `
+                <img src="${iconPath}" alt="icon">
+                <span>${network.ssid} ${securityIcon}</span>
+                `;
+
+                item.title = `Signal: ${network.signal} dBm\nSecurity: ${network.security}`;
+
+                item.onclick = function () {
+                selectedDisplay.textContent = `${network.ssid}`;
+                hiddenInput.value = network.ssid;
+                signalIcon.src = iconPath;
+                list.style.display = "none";
+                };
+
+                list.appendChild(item);
+            });
+            }
+
+            function toggleDropdown() {
+                const list = document.getElementById("wifiList");
+                list.style.display = list.style.display === "none" ? "block" : "none";
+                }
+
+
         // Hàm quét WiFi từ thiết bị - có thể gửi lệnh qua BLE hoặc mô phỏng với dữ liệu mẫu
         function scanWifi() {
             if (!dev || !dev.gatt.connected) {
@@ -262,32 +343,58 @@
             div.appendChild(p);
             div.scrollTop = div.scrollHeight;
             }
-        function handleNotifications(event) {  // hàm nhận và phải hồi dữ liệu tới Web từ ESP
-            // Chuyển đổi dữ liệu từ dạng binary (ArrayBuffer) thành chuỗi văn bản
+
+
+
+
+        function handleNotifications(event) {
             let receivedData = new TextDecoder().decode(event.target.value);
-            
-            // Hiển thị dữ liệu nhận được trên terminal
-            log("📡 Received from ESP32: " + receivedData);  
-            logBLE("6e400003-b5a3-f393-e0a9-e50e24dcca9e","Receive",`${receivedData}`);
-        
-            if (receivedData.includes("WIFI_LIST:")) {
-                const wifiListData = receivedData.replace("WIFI_LIST:", "").trim();
-                const networks = parseWifiNetworks(wifiListData);
-                populateWifiDropdown(networks);
-                log(`📶 Found ${networks.length} WiFi networks`);
+            log("📡 Received from ESP32: " + receivedData);
+            logBLE("6e400003-b5a3-f393-e0a9-e50e24dcca9e", "Receive", receivedData);
+
+            // Bắt đầu nhận danh sách WiFi
+            if (receivedData === "WIFI_BEGIN") {
+                wifiBuffer = "";
+                receivingWifiList = true;
+                log("🚀 Starting to receive WiFi list...");
             }
-            // Kiểm tra chuỗi nhận được và mở các nút tương ứng
+
+            // Ghép từng phần lại
+            else if (receivedData.startsWith("WIFI_PART:") && receivingWifiList) {
+                let chunk = receivedData.replace("WIFI_PART:", "");
+                wifiBuffer += chunk;
+            }
+
+            // Kết thúc nhận WiFi
+            else if (receivedData === "WIFI_END") {
+                receivingWifiList = false;
+                log("✅ Completed receiving WiFi list");
+                log("📶 Full WiFi list: " + wifiBuffer);
+
+                const networks = parseWifiNetworks(wifiBuffer);
+                populateWifiDropdown(networks);
+                log(`📡 Parsed ${networks.length} WiFi networks`);
+            }
+
+            // Các thông báo khác từ ESP32
             else if (receivedData.includes("Wifi is connected")) {
                 log("✅ WiFi connected! Enabling MQTT configuration...");
                 document.getElementById("connectMqttBtn").disabled = false;
-            } else if (receivedData.includes("MQTT is connected")) {
+            } 
+            else if (receivedData.includes("Password is incorrect")) {
+                log("❌ ESP32: WiFi password is incorrect");
+                log("Please type the other PassWord");
+                const passwordInput = document.getElementById("Password");
+            }
+            else if (receivedData.includes("MQTT is connected")) {
                 log("✅ MQTT connected! Enabling message publishing...");
                 document.getElementById("sendMqttBtn").disabled = false;
                 document.getElementById("sendInterval").disabled = false;
                 document.getElementById("count").disabled = false;
                 document.getElementById("reset").disabled = false;
                 document.getElementById("pause").disabled = false;
-            } else {
+            } 
+            else {
                 log("ESP32 says: " + receivedData);
             }
         }
@@ -459,6 +566,15 @@
             .catch(error => log("Error sending reset command: " + error));
             logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send","Count:pause");
         }
+
+document.addEventListener("click", function(event) {
+  const dropdown = document.getElementById("wifiList");
+  const selected = document.getElementById("selectedSSID");
+  if (!selected.contains(event.target)) {
+    dropdown.style.display = "none";
+  }
+});
+
     </script>
     
 </body>
