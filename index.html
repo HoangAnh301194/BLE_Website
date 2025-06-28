@@ -400,10 +400,13 @@
         }
 
         function requestBluetoothDevice() {
+            console.log("Scan " );
             navigator.bluetooth.requestDevice({
-                filters: [{ name: deviceName }],
-                optionalServices: [bleService]
+                 filters: [
+                     { services: ['0000181f-0000-1000-8000-00805f9b34fb'] }
+                    ]
             })
+
             .then(device => {
                     dev = device; // ✅ Gán thiết bị BLE vào biến dev
                     return device.gatt.connect();
