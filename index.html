@@ -33,74 +33,84 @@
             border: none;
             padding: 10px;
         }
-        /* Style cho dropdown */
-        select {
-            width: 100%;
-            padding: 8px 12px;
-            margin-bottom: 8px;
-            border-radius: 4px;
-            border: 1px solid #ddd;
+        /* Popup Modal CSS */
+        .modal {
+          display: none;
+          position: fixed;
+          z-index: 1000;
+          left: 0; top: 0; width: 100vw; height: 100vh;
+          overflow: auto;
+          background: rgba(0,0,0,0.4);
         }
-        .wifi-strength {
-            display: inline-block;
-            width: 20px;
-            margin-right: 8px;
+        .modal-content {
+          background: #fff; color: #222;
+          margin: 10% auto; padding: 20px;
+          border-radius: 10px; width: 90%; max-width: 400px;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.2);
         }
-        .security-icon {
-            margin-left: 8px;
-            font-size: 14px;
+        .close {
+          color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;
         }
-
-
+        .close:hover { color: #333; }
+        #wifiListPopup > div {
+          padding: 10px; border-bottom: 1px solid #eee; cursor: pointer;
+          display: flex; align-items: center;
+        }
+        #wifiListPopup > div:hover { background: #f0f0f0; }
+        /* Hide old dropdown */
         .dropdown-custom {
-        position: relative;
-        width: 100%;
-        margin-bottom: 10px;
+            display: none;
         }
-
         .selected {
-        padding: 10px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        background: white;
-        color: black;
-        cursor: pointer;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            color: black;
+            cursor: default;
+            margin-bottom: 10px;
         }
-
-        .dropdown-list {
-        position: absolute;
-        width: 100%;
-        background: rgb(255, 255, 255);
-        border: 1px solid #000000;
-        border-top: none;
-        max-height: 200px;
-        overflow-y: auto;
-        z-index: 10;
+        #wifiListPopup {
+            max-height: 300px;
+            overflow-y: auto;
         }
-
-        .dropdown-item {
+        .scanning-indicator {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-style: italic;
+        }
+        .loading-spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #wifiListPopup > div {
             display: flex;
             align-items: center;
-            padding: 8px 12px;
-            cursor: pointer;
-            color: black; /* <-- thêm dòng này */
+            justify-content: space-between;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            gap: 10px;
         }
 
-        .dropdown-item:hover {
-            background-color: #f0f0f0;
-            color: black; /* <-- đảm bảo khi hover vẫn màu đen */
+        #wifiListPopup img {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
         }
-
-        .dropdown-item img {
-        width: 20px;
-        height: 20px;
-        margin-right: 8px;
-        }
-
 
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
-    
 </head>
 <body>
     <div class="container">
@@ -109,35 +119,38 @@
         
         <h4>WiFi Configuration</h4>
         <button class="btn btn-info btn-block" id="scanWifiBtn" onclick="scanWifi()">Scan WiFi Networks</button>
-        <!-- Đổi input thành select dropdown -->
-        <!-- <select id="SSID" class="form-control mb-2">
-            <option value="">-- Select WiFi Network --</option>
-        </select>
-        <img id="signalIcon" src="" alt="Signal Icon" style="width: 24px; height: 24px; vertical-align: middle;" /> -->
-
-        <!-- Bỏ <select> cũ -->
-        <!-- Thay bằng dropdown tùy chỉnh -->
-        <div class="dropdown-custom">
-        <div id="selectedSSID" class="selected" onclick="toggleDropdown()">-- Select WiFi Network --</div>
-        <div id="wifiList" class="dropdown-list" style="display: none;"></div>
-        </div>
+        <!-- Popup Modal WiFi -->
         <input type="hidden" id="SSID" />
-
+        <div id="selectedSSID" class="selected">-- Chưa chọn WiFi --</div>
         <input type="password" id="Password" placeholder="Enter Password" class="form-control mb-2">
         <!-- Nút "Kết nối" ban đầu bị vô hiệu hóa (disabled) -->
         <button id="connectWifiBtn" onclick="ConnectWifi()" class="btn btn-success btn-block" disabled>Connect</button> 
 
+        <!-- Popup Modal WiFi -->
+        <div id="wifiModal" class="modal" style="display:none;">
+          <div class="modal-content">
+            <span class="close" onclick="closeWifiModal()">&times;</span>
+            <h2>Select WiFi</h2>
+            <button onclick="forceRescanWifi()" class="btn btn-primary" style="margin-bottom: 10px;">🔄 Rescan</button>
+
+            <div id="wifiListPopup">
+                <div class="scanning-indicator">
+                    <div class="loading-spinner"></div>
+                    Scanning WiFi...
+                </div>
+            </div>
+          </div>
+        </div>
+        
        <h4>MQTT Broker Configuration</h4>
        <input type="text" id="brokerAddress" placeholder="Enter Broker Address" class="form-control mb-2">
        <input type="password" id="brokerPassword" placeholder="Enter Broker Password" class="form-control mb-2">
        <!-- Nút "Kết nối" ban đầu bị vô hiệu hóa (disabled) -->
        <button id="connectMqttBtn" onclick="ConnectMqtt()" class="btn btn-success btn-block" disabled>Connect</button> 
-      <!-- <button onclick="ConnectWifi()" class="btn btn-success btn-block">Kết nối</button> -->
        
         <h4>MQTT Publish</h4>
         <input type="text" id="mqttTopic" placeholder="Enter Topic" class="form-control mb-2">
         <input type="text" id="mqttMessage" placeholder="Enter Message" class="form-control mb-2">
-       <!-- <button onclick="publishMessage()" class="btn btn-warning btn-block">Send</button> -->
        <button id="sendMqttBtn" onclick="publishMessage()" class="btn btn-warning btn-block" disabled>Send</button>
 
        <h4>MQTT Counting</h4>
@@ -161,82 +174,60 @@
        
         <h4>Terminal</h4>
         <textarea id="textareaNotification" readonly></textarea>
-        
-        
-
     </div>
 
-
-    <script> // hoạt động của WEB BLE 
-        var deviceName = 'BLE_Wifi';  // tên thiết bị kết nối ble 
-        var bleService = "0000181f-0000-1000-8000-00805f9b34fb"; // định nghĩa uuid dịch vụ ble 
+    <script>
+        var deviceName = 'BLE_Wifi';
+        var bleService = "0000181f-0000-1000-8000-00805f9b34fb";
         var RXUUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e" ;
         var TXUUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e" ;
         var RX ;
-        var TX ; 
+        var TX ;
         var dev;
         let wifiBuffer = "";
         let receivingWifiList = false;
+        let wifiNetworks = [];
+        let isScanning = false;
+        
         // Kết nối MQTT WebSocket
         var mqttClient = mqtt.connect('ws://192.168.1.34:9001');
 
-        // Hàm log hiển thị text trên ô terminal 
         function log(text) {
             const textarea = document.getElementById("textareaNotification");
             textarea.value += text + "\n";
-            textarea.scrollTop = textarea.scrollHeight; // cuộn xuống dòng mới nhất
+            textarea.scrollTop = textarea.scrollHeight;
         }
-
-
-        // Hàm xóa log
         function clearLog() {
             document.getElementById("textareaNotification").value = "";
         }
 
-        // Kết nối MQTT WebSocket
+        // MQTT events
         var mqttClient = mqtt.connect('ws://192.168.1.34:9001');
-        // Khi kết nối MQTT thành công
         mqttClient.on("connect", function () {
-            clearLog();  // Xóa log khi kết nối lại
+            clearLog();
             log("Connected to MQTT Broker");
-
-            // Bật nút gửi MQTT khi kết nối thành công
             document.getElementById("sendMqttBtn").disabled = false;
-
-            // Bật nút kết nối WiFi khi kết nối BLE thành công
             document.getElementById("connectWifiBtn").disabled = false;
         });
-
-        // Khi mất kết nối MQTT
         mqttClient.on("close", function () {
             log("Disconnected from MQTT Broker. Reconnecting...");
-            // Thử kết nối lại sau 2 giây
             setTimeout(() => {
                 mqttClient.reconnect();
             }, 500);
         });
-
-        // Nếu gặp lỗi khi kết nối
         mqttClient.on("error", function (err) {
             log("MQTT Error: " + err.message);
         });
-        
-        // Hàm phân tích chuỗi WiFi từ ESP32
+
         function parseWifiNetworks(wifiString) {
             const networks = [];
-
-            // Mỗi mạng WiFi được ngăn cách bởi dấu |
             const entries = wifiString.split("|");
-
             entries.forEach(entry => {
-                // Mỗi thông tin trong mạng (SSID, Signal, Security) ngăn cách bằng dấu ;
                 const parts = entry.split(";");
-
                 if (parts.length === 3) {
                     const ssid = parts[0];
                     const signal = parseInt(parts[1]);
                     const security = parts[2];
-
                     networks.push({
                         ssid: ssid,
                         signal: signal,
@@ -244,14 +235,10 @@
                     });
                 }
             });
-
-            // Sắp xếp theo cường độ tín hiệu giảm dần (signal lớn hơn tức là mạnh hơn)
             networks.sort((a, b) => b.signal - a.signal);
-
             return networks;
         }
 
-        // Hàm trả về đường dẫn file PNG dựa trên cường độ tín hiệu
         function getWifiSignalIcon(signal) {
             if (signal > -40) return "excellent.png";
             else if (signal > -60) return "good.png";
@@ -259,77 +246,97 @@
             else return "weak.png";
         }
 
+        // Hàm hiển thị popup với trạng thái scanning
+        function showWifiPopupWithScanning() {
+            const list = document.getElementById("wifiListPopup");
+            list.innerHTML = `
+                <div class="scanning-indicator">
+                    <div class="loading-spinner"></div>
+                    Đang quét mạng WiFi...
+                </div>
+            `;
+            document.getElementById("wifiModal").style.display = "block";
+            isScanning = true;
+        }
 
-        function populateWifiDropdown(networks) {
-            const list = document.getElementById("wifiList");
-            const selectedDisplay = document.getElementById("selectedSSID");
-            const hiddenInput = document.getElementById("SSID");
-            const signalIcon = document.getElementById("signalIcon");
+        // Hàm xóa indicator scanning
+        function removeScanningIndicator() {
+            const scanningIndicator = document.querySelector(".scanning-indicator");
+            if (scanningIndicator) {
+                scanningIndicator.remove();
+            }
+            isScanning = false;
+        }
 
-            list.innerHTML = ""; // Xóa danh sách cũ
-
+        // Hàm popup hiển thị danh sách WiFi
+        function populateWifiPopup(networks) {
+            const list = document.getElementById("wifiListPopup");
+            list.innerHTML = "";
             networks.forEach(network => {
                 const item = document.createElement("div");
-                item.className = "dropdown-item";
-
-                const iconPath = "icons/" + getWifiSignalIcon(network.signal);
-                const securityIcon = network.security === "SECURED" ? "🔒" : "🔓";
-
+                const iconUrl = getWifiSignalIcon(network.signal);
                 item.innerHTML = `
-                <img src="${iconPath}" alt="icon">
-                <span>${network.ssid} ${securityIcon}</span>
+                    <img src="${iconUrl}" width="20" height="20" style="margin-right:8px;" title="${network.signal} dBm">
+                    <span style="flex:1;">${network.ssid}</span>
+                    <span style="margin-left:10px;">${network.security === "SECURED" ? "🔒" : "🔓"}</span>
                 `;
-
-                item.title = `Signal: ${network.signal} dBm\nSecurity: ${network.security}`;
-
-                item.onclick = function () {
-                selectedDisplay.textContent = `${network.ssid}`;
-                hiddenInput.value = network.ssid;
-                signalIcon.src = iconPath;
-                list.style.display = "none";
+                item.onclick = () => {
+                    document.getElementById("SSID").value = network.ssid;
+                    document.getElementById("selectedSSID").textContent = network.ssid + (network.security === "SECURED" ? " 🔒" : " 🔓");
+                    closeWifiModal();
                 };
-
                 list.appendChild(item);
             });
-            }
-
-            function toggleDropdown() {
-                const list = document.getElementById("wifiList");
-                list.style.display = list.style.display === "none" ? "block" : "none";
-                }
+            document.getElementById("wifiModal").style.display = "block";
+        }
 
 
-        // Hàm quét WiFi từ thiết bị - có thể gửi lệnh qua BLE hoặc mô phỏng với dữ liệu mẫu
+        function closeWifiModal() {
+          document.getElementById("wifiModal").style.display = "none";
+          isScanning = false;
+        }
         function scanWifi() {
             if (!dev || !dev.gatt.connected) {
                 log("❌ BLE not connected. Please connect to BLE device first!");
                 return;
             }
-            
-            log("🔍 Scanning for WiFi networks...");
-            
-        // gửi lệnh qua BLE để ESP32 quét WiFi
-            TX.writeValue(new TextEncoder().encode("SCAN_WIFI"))
-               .then(() => log("Sent WiFi scan command to ESP32"))
-               .catch(error => log("Error sending WiFi scan command: " + error));
-               logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send","SCAN_WIFI");
 
+            if (wifiNetworks.length > 0) {
+                log("📋 Showing previously scanned WiFi list...");
+                populateWifiPopup(wifiNetworks);
+                return;
+            }
+
+            // Chưa có dữ liệu → scan mới
+            showWifiPopupWithScanning();
+            wifiNetworks = [];
+            log("🔍 Scanning for WiFi networks...");
+            TX.writeValue(new TextEncoder().encode("SCAN_WIFI"))
+                .then(() => log("Sent WiFi scan command to ESP32"))
+                .catch(error => {
+                    log("Error sending WiFi scan command: " + error);
+                    closeWifiModal();
+                });
+            logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e", "Send", "SCAN_WIFI");
         }
-        
+
+        function forceRescanWifi() {
+            log("🔁 Forcing re-scan of WiFi...");
+            wifiNetworks = [];
+            closeWifiModal();
+            scanWifi();
+        }
+
 
         function toggleFunction() {
             const button = document.getElementById("toggleButton");
-
-            if (!dev) {  
-                // Trường hợp ban đầu hoặc khi bị ngắt kết nối -> quét lại thiết bị
+            if (!dev) {
                 button.innerText = "DISCONNECT";
                 requestBluetoothDevice();
-            } else if (dev && dev.gatt.connected) {  
-                // Nếu đang kết nối → ngắt kết nối
+            } else if (dev && dev.gatt.connected) {
                 button.innerText = "RESCAN";
                 disconnect();
-            } else {  
-                // Nếu mất kết nối bất ngờ → quét lại
+            } else {
                 button.innerText = "DISCONNECT";
                 requestBluetoothDevice();
             }
@@ -338,49 +345,57 @@
             const div = document.getElementById("bleExchangeDisplay");
             const p = document.createElement("p");
             const timestamp = new Date().toLocaleTimeString();
-
             p.innerHTML = `[${timestamp}] <strong>${direction}</strong> | <span style="color:blue">${uuid}</span> : ${content}`;
             div.appendChild(p);
             div.scrollTop = div.scrollHeight;
-            }
-
-
-
+        }
 
         function handleNotifications(event) {
             let receivedData = new TextDecoder().decode(event.target.value);
             log("📡 Received from ESP32: " + receivedData);
             logBLE("6e400003-b5a3-f393-e0a9-e50e24dcca9e", "Receive", receivedData);
 
-            // Bắt đầu nhận danh sách WiFi
             if (receivedData === "WIFI_BEGIN") {
-                wifiBuffer = "";
-                receivingWifiList = true;
+                // Nếu popup chưa hiển thị thì hiển thị
+                if (!isScanning) {
+                    wifiNetworks = [];
+                    document.getElementById("wifiListPopup").innerHTML = "";
+                    document.getElementById("wifiModal").style.display = "block";
+                }
+                // Xóa indicator scanning và chuẩn bị nhận dữ liệu
+                removeScanningIndicator();
                 log("🚀 Starting to receive WiFi list...");
             }
-
-            // Ghép từng phần lại
-            else if (receivedData.startsWith("WIFI_PART:") && receivingWifiList) {
-                let chunk = receivedData.replace("WIFI_PART:", "");
-                wifiBuffer += chunk;
+            else if (receivedData.startsWith("part:")) {
+                let chunk = receivedData.replace("part:", "");
+                // chunk dạng: ssid;signal;security
+                let parts = chunk.split(";");
+                if (parts.length === 3) {
+                    let ssid = parts[0];
+                    let signal = parseInt(parts[1]);
+                    let security = parts[2];
+                    // Kiểm tra tránh trùng SSID
+                    let exists = wifiNetworks.some(net => net.ssid === ssid);
+                    if (!exists) {
+                        let network = { ssid, signal, security };
+                        wifiNetworks.push(network);
+                        // Hiển thị ngay lập tức mạng WiFi vừa nhận được
+                        appendWifiToPopup(network);
+                        log(`📶 Found WiFi: ${ssid} (${signal} dBm)`);
+                    }
+                }
             }
-
-            // Kết thúc nhận WiFi
             else if (receivedData === "WIFI_END") {
-                receivingWifiList = false;
                 log("✅ Completed receiving WiFi list");
-                log("📶 Full WiFi list: " + wifiBuffer);
-
-                const networks = parseWifiNetworks(wifiBuffer);
-                populateWifiDropdown(networks);
-                log(`📡 Parsed ${networks.length} WiFi networks`);
+                isScanning = false;
+                // Sắp xếp lại danh sách theo cường độ tín hiệu
+                sortWifiList();
             }
-
-            // Các thông báo khác từ ESP32
+            // ... các phần khác giữ nguyên
             else if (receivedData.includes("Wifi is connected")) {
                 log("✅ WiFi connected! Enabling MQTT configuration...");
                 document.getElementById("connectMqttBtn").disabled = false;
-            } 
+            }
             else if (receivedData.includes("Password is incorrect")) {
                 log("❌ ESP32: WiFi password is incorrect");
                 log("Please type the other PassWord");
@@ -393,11 +408,56 @@
                 document.getElementById("count").disabled = false;
                 document.getElementById("reset").disabled = false;
                 document.getElementById("pause").disabled = false;
-            } 
+            }
             else {
                 log("ESP32 says: " + receivedData);
             }
         }
+        
+        // Hàm sắp xếp lại danh sách WiFi theo cường độ tín hiệu
+        function sortWifiList() {
+            wifiNetworks.sort((a, b) => b.signal - a.signal);
+            const list = document.getElementById("wifiListPopup");
+            list.innerHTML = "";
+
+            wifiNetworks.forEach(network => {
+                const item = document.createElement("div");
+                const iconUrl = getWifiSignalIcon(network.signal);
+                item.innerHTML = `
+                    <img src="icons/${iconUrl}" width="20" height="20" style="margin-right:8px;">
+                    <span style="flex:1;">${network.ssid}</span>
+                    <span>${network.signal} dBm</span>
+                    <span style="margin-left:10px;">${network.security === "SECURED" ? "🔒" : "🔓"}</span>
+                `;
+                item.onclick = () => {
+                    document.getElementById("SSID").value = network.ssid;
+                    document.getElementById("selectedSSID").textContent = network.ssid + (network.security === "SECURED" ? " 🔒" : " 🔓");
+                    closeWifiModal();
+                };
+                list.appendChild(item);
+            });
+        }
+
+
+        // Hàm appendWifiToPopup (copy toàn bộ)
+        function appendWifiToPopup(network) {
+            const list = document.getElementById("wifiListPopup");
+            const item = document.createElement("div");
+            const iconUrl = getWifiSignalIcon(network.signal); // Lấy tên file icon từ độ mạnh tín hiệu
+            item.innerHTML = `
+                <img src="icons/${iconUrl}" width="20" height="20" style="margin-right:8px;">
+                <span style="flex:1;">${network.ssid}</span>
+                <span>${network.signal} dBm</span>
+                <span style="margin-left:10px;">${network.security === "SECURED" ? "🔒" : "🔓"}</span>
+            `;
+            item.onclick = () => {
+                document.getElementById("SSID").value = network.ssid;
+                document.getElementById("selectedSSID").textContent = network.ssid + (network.security === "SECURED" ? " 🔒" : " 🔓");
+                closeWifiModal();
+            };
+            list.appendChild(item);
+        }
+
 
         function requestBluetoothDevice() {
             console.log("Scan " );
@@ -408,48 +468,44 @@
             })
 
             .then(device => {
-                    dev = device; // ✅ Gán thiết bị BLE vào biến dev
+                    dev = device;
                     return device.gatt.connect();
                 })
             .then(server => server.getPrimaryService(bleService))
             .then(service => {
                 return Promise.all([
-                    // service.getCharacteristic(wifiCharacteristicUUID).then(char => wifiCharacteristic = char),
                     service.getCharacteristic(TXUUID).then(char => TX = char),
-                    service.getCharacteristic(RXUUID).then(char => RX = char) // Lấy characteristic nhận dữ liệu
+                    service.getCharacteristic(RXUUID).then(char => RX = char)
                 ]);
             })
             .then(() => {
                 log("BLE connected! Listening for notifications...");
                 RX.startNotifications().then(() => {
-                    RX.addEventListener("characteristicvaluechanged", handleNotifications);  // Gọi handleNotifications khi có thay đổi giá trị
+                    RX.addEventListener("characteristicvaluechanged", handleNotifications);
                 });
                 let confirm = new TextEncoder().encode("BLE is connected!");
                 TX.writeValue(confirm)
                 .then(() => log("Confirmed connected BLE with ESSP32 !!!"))
                 .catch(error => log("Error connecting BLE : " + error));
                 logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send","BLE is connected!");
-                // Mở nút kết nối WiFi sau khi kết nối BLE thành công
-                document.getElementById('connectWifiBtn').disabled = false;  // Mở nút kết nối WiFi
-                document.getElementById('scanWifiBtn').disabled = false;     // Mở nút quét WiFi
+                document.getElementById('connectWifiBtn').disabled = false;
+                document.getElementById('scanWifiBtn').disabled = false;
             })
             .catch(error => log("BLE Error: " + error));
         }
 
-    
         function disconnect() {
             if (dev && dev.gatt.connected) {
                 dev.gatt.disconnect();
                 log("Disconnected from BLE");
             }
             dev = null;
-            //  Vô hiệu hóa các nút khi mất kết nối BLE
-            document.getElementById("connectWifiBtn").disabled = true; 
+            document.getElementById("connectWifiBtn").disabled = true;
             document.getElementById("connectMqttBtn").disabled = true;
             document.getElementById("sendMqttBtn").disabled = true;
             document.getElementById("scanWifiBtn").disabled = true;
         }
-    
+
         function ConnectWifi() {
             if (!TX) {
                 log("WiFi characteristic not found!----> BLE's Data is not connected !");
@@ -457,14 +513,13 @@
             }
             var ssid = document.getElementById("SSID").value;
             var password = document.getElementById("Password").value;
-    
-            if (ssid) { // chỉ cần có SSID , pass có thể rỗng cũng được 
+            if (ssid) {
                 var data = new TextEncoder().encode("WIFI:"+ ssid + ";" + password);
-                TX.writeValue(data)  // gửi dữ liệu wifi dưới dạng định danh : WIFI:___:___
+                TX.writeValue(data)
                     .then(() => log("WiFi credentials sent successfully"))
                     .catch(error => log("WiFi send error: " + error));
-                    logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`WIFI:${ssid};${password}`);
-            } else { // nếu chưa có ssid và pass thì thông báo nhập lại trên terminal 
+                logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`WIFI:${ssid};${password}`);
+            } else {
                 log("Please enter both SSID and Password!");
             }
         }
@@ -483,11 +538,9 @@
                 logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`MQTTdata:${brokerAddress};${brokerPassword}`);
             }
             else {
-                // nếu chưa có gì trong ô nhập liệu thì thông báo trên terminal 
                 log("Please enter the MQTT Broker's Address and PassWord !");
             }
         }
-    
         function publishMessage() {
             if (!TX) {
                 log("MQTT message characteristic not found!");
@@ -495,20 +548,17 @@
             }
             var topic = document.getElementById("mqttTopic").value;
             let message = document.getElementById("mqttMessage").value;
-    
             if (topic && message) {
                 var data = new TextEncoder().encode("MQTT:" + topic + ";" + message);
-                TX.writeValue(data) // gửi dữ liệu MQTT  với định dạng MQTT:__;___
+                TX.writeValue(data)
                     .then(() => log("📧 Topic & Message sent successfully"))
                     .catch(error => log("Send error: " + error));
                 logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`MQTT:${topic};${message}`);
-
             } else {
                 log("Please enter both Topic and Message!");
             }
         }
 
-        // Bật nút Connect MQTT khi nhập đủ thông tin
         document.getElementById("brokerAddress").addEventListener("input", toggleMqttButton);
         document.getElementById("brokerPassword").addEventListener("input", toggleMqttButton);
 
@@ -521,17 +571,13 @@
         function onDisconnected() {
             log("BLE Disconnected! Please RESCAN.");
             document.getElementById("toggleButton").innerText = "RESCAN";
-            document.getElementById("connectWifiBtn").disabled = true; 
+            document.getElementById("connectWifiBtn").disabled = true;
             document.getElementById("connectMqttBtn").disabled = true;
             document.getElementById("sendMqttBtn").disabled = true;
             document.getElementById("scanWifiBtn").disabled = true;
-            dev = null; // Xóa trạng thái thiết bị
+            dev = null;
         }
 
-
-
-                        
-        // Gửi thời gian interval cho ESP32 (đơn vị tùy ESP32 xử lý, ví dụ ms hoặc giây)
         function interval() {
             let intervalValue = document.getElementById("interval").value;
             if (!intervalValue) {
@@ -544,8 +590,6 @@
                 .catch(error => log("Error sending interval: " + error));
             logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`Count:setTime;${intervalValue}`);
         }
-
-        // Gửi lệnh bắt đầu hoặc tiếp tục đếm
         function counting() {
             let command = new TextEncoder().encode("Count:start");
             TX.writeValue(command)
@@ -553,8 +597,6 @@
                 .catch(error => log("Error starting count: " + error));
             logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send","Count:start");
         }
-
-        // Gửi lệnh reset bộ đếm
         function resetCounting() {
             let command = new TextEncoder().encode("Count:reset");
             TX.writeValue(command)
@@ -569,16 +611,6 @@
             .catch(error => log("Error sending reset command: " + error));
             logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send","Count:pause");
         }
-
-document.addEventListener("click", function(event) {
-  const dropdown = document.getElementById("wifiList");
-  const selected = document.getElementById("selectedSSID");
-  if (!selected.contains(event.target)) {
-    dropdown.style.display = "none";
-  }
-});
-
     </script>
-    
 </body>
 </html>
