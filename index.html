@@ -143,7 +143,10 @@
         </div>
         
        <h4>MQTT Broker Configuration</h4>
-       <input type="text" id="brokerAddress" placeholder="Enter Broker Address" class="form-control mb-2">
+
+       <input type ="text" id= "mqttServer" placeholder ="Enter MQTT Server" class="form-control mb-2">
+       <input type = "text" id="mqttPort" placeholder="Enter MQTT Port" class="form-control mb-2">
+       <input type="text" id="username" placeholder="Enter Broker Username" class="form-control mb-2">
        <input type="password" id="brokerPassword" placeholder="Enter Broker Password" class="form-control mb-2">
        <!-- Nút "Kết nối" ban đầu bị vô hiệu hóa (disabled) -->
        <button id="connectMqttBtn" onclick="ConnectMqtt()" class="btn btn-success btn-block" disabled>Connect</button> 
@@ -317,7 +320,7 @@
                     log("Error sending WiFi scan command: " + error);
                     closeWifiModal();
                 });
-            logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e", "Send", "SCAN_WIFI");
+            logBLE("TX", "Send", "SCAN_WIFI");
         }
 
         function forceRescanWifi() {
@@ -353,7 +356,7 @@
         function handleNotifications(event) {
             let receivedData = new TextDecoder().decode(event.target.value);
             log("📡 Received from ESP32: " + receivedData);
-            logBLE("6e400003-b5a3-f393-e0a9-e50e24dcca9e", "Receive", receivedData);
+            logBLE("RX", "Receive", receivedData);
 
             if (receivedData === "WIFI_BEGIN") {
                 // Nếu popup chưa hiển thị thì hiển thị
@@ -487,7 +490,7 @@
                 TX.writeValue(confirm)
                 .then(() => log("Confirmed connected BLE with ESSP32 !!!"))
                 .catch(error => log("Error connecting BLE : " + error));
-                logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send","BLE is connected!");
+                logBLE("TX","Send","BLE is connected!");
                 document.getElementById('connectWifiBtn').disabled = false;
                 document.getElementById('scanWifiBtn').disabled = false;
             })
@@ -518,7 +521,7 @@
                 TX.writeValue(data)
                     .then(() => log("WiFi credentials sent successfully"))
                     .catch(error => log("WiFi send error: " + error));
-                logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`WIFI:${ssid};${password}`);
+                logBLE("TX","Send",`WIFI:${ssid};${password}`);
             } else {
                 log("Please enter both SSID and Password!");
             }
@@ -528,17 +531,20 @@
                 log("MQTT characteristis is not found! -----> BLE 's Data is not connected !");
                 return ;
             }
-            var brokerAddress = document.getElementById("brokerAddress").value;
+            var mqttport = document.getElementById("mqttPort").value;
+            var mqttServer = document.getElementById("mqttServer").value;
+            var username = document.getElementById("username").value;
             var brokerPassword = document.getElementById("brokerPassword").value ;
-            if ( brokerAddress && brokerPassword ){
-                var data = new TextEncoder().encode("MQTTdata:" + brokerAddress +";" + brokerPassword);
+
+            if ( username && mqttServer  ){
+                var data = new TextEncoder().encode("MQTTdata:"+ mqttServer+";" + mqttport +";"+ username +";" + brokerPassword);
                 TX.writeValue(data)
                     .then(() => log ("MQTT Broker credentials sent successfull !"))
                     .catch(error => log("MQTT Broker data sent error: "+ error));
-                logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`MQTTdata:${brokerAddress};${brokerPassword}`);
+                logBLE("TX","Send",`MQTTdata:${mqttServer};${mqttport};${username};${brokerPassword}`);
             }
             else {
-                log("Please enter the MQTT Broker's Address and PassWord !");
+                log("Please enter the MQTT Broker's username and PassWord !");
             }
         }
         function publishMessage() {
@@ -553,17 +559,17 @@
                 TX.writeValue(data)
                     .then(() => log("📧 Topic & Message sent successfully"))
                     .catch(error => log("Send error: " + error));
-                logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`MQTT:${topic};${message}`);
+                logBLE("TX","Send",`MQTT:${topic};${message}`);
             } else {
                 log("Please enter both Topic and Message!");
             }
         }
 
-        document.getElementById("brokerAddress").addEventListener("input", toggleMqttButton);
+        document.getElementById("username").addEventListener("input", toggleMqttButton);
         document.getElementById("brokerPassword").addEventListener("input", toggleMqttButton);
 
         function toggleMqttButton() {
-            var broker = document.getElementById("brokerAddress").value;
+            var broker = document.getElementById("username").value;
             var password = document.getElementById("brokerPassword").value;
             document.getElementById("connectMqttBtn").disabled = !(broker && password &&  dev && dev.gatt.connected);
         }
@@ -588,28 +594,28 @@
             TX.writeValue(command)
                 .then(() => log("⏱️ Interval sent to ESP32: " + intervalValue))
                 .catch(error => log("Error sending interval: " + error));
-            logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send",`Count:setTime;${intervalValue}`);
+            logBLE("TX","Send",`Count:setTime;${intervalValue}`);
         }
         function counting() {
             let command = new TextEncoder().encode("Count:start");
             TX.writeValue(command)
                 .then(() => log("▶️ Counting started"))
                 .catch(error => log("Error starting count: " + error));
-            logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send","Count:start");
+            logBLE("TX","Send","Count:start");
         }
         function resetCounting() {
             let command = new TextEncoder().encode("Count:reset");
             TX.writeValue(command)
                 .then(() => log("🔄 Count reset sent"))
                 .catch(error => log("Error sending reset command: " + error));
-            logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send","Count:reset");
+            logBLE("TX","Send","Count:reset");
         }
         function pause(){
             let command = new TextEncoder().encode("Count:pause");
             TX.writeValue(command)
             .then(() => log("▶️ Stop counting !!!"))
             .catch(error => log("Error sending reset command: " + error));
-            logBLE("6e400002-b5a3-f393-e0a9-e50e24dcca9e","Send","Count:pause");
+            logBLE("TX","Send","Count:pause");
         }
     </script>
 </body>
