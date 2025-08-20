@@ -7,20 +7,123 @@
     <style>
         body {
             font-family: 'Arial', sans-serif;
-            background: linear-gradient(to right, #4facfe, #00f2fe);
-            color: white;
+            background: linear-gradient(to right, #4facfe, #03c7d1);
+            color: rgb(0, 0, 0);
         }
         .container {
+            position:relative ;
             max-width: 600px;
+            height : 107vh;
             margin: auto;
             background: rgba(255, 255, 255, 0.2);
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
+        }
+        /* trang chính */
+        .page {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left : 0;
+            background: #fffdfd;
+            padding: 20px;
+            box-sizing: border-box;
+
+            /* Hiệu ứng chung */
+            opacity: 1;
+            transition: none ;
+            display: block;
+        }
+        /* Chỉ hiện trang có class "active" */
+        .page.active {
+            display: block;
+            opacity: 1;
+            z-index: 10;
+        }
+        /* Trang vừa rời đi */
+        .page.exit {
+        opacity: 0;
+        display: none;
+        z-index: 0;
+        }
+        
+        .configWifi {
+            position: absolute;
+            opacity: 1;
+            top: 0; left: 0;
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+            background: #89e7f3;
+            padding: 20px;
+            transition: none ;
+            display : block;
+        }
+
+
+        .configWifi.exit {
+            display: none;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            z-index: 0;
+            pointer-events: none; /* Ngăn chặn sự kiện chuột khi ẩn */
+            
+        }
+        .page-camera {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background: #f5f786;
+            padding: 20px;
+            box-sizing: border-box;
+            color: #333;
+            opacity: 1;
+            transition : none ;
+            display : none; /* Ẩn mặc định */
+        }
+
+        .page-camera.active {
+            display:block;
+            opacity: 1;
+            z-index: 10;
+        }
+
+        .page-camera.exit {
+            opacity: 0;
+            display : none ;
+            z-index: 0;
+        }
+        /* Animation khi chuyển trang */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         .btn-primary {
             background-color: #dbf300;
             border: none;
+        }
+        .btn-camera {
+            background-color: #c43232;
+            border: none;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 18px;
         }
         .btn-primary:hover {
             background-color: #f1e96d;
@@ -108,77 +211,138 @@
             height: 20px;
             flex-shrink: 0;
         }
+        #page-camera {
+            background-color: #d8d82d;
+            padding: 20px;
+            max-width: 800px;   /* cho container rộng tối đa 800px */
+            width: fit-content; /* tự mở rộng theo nội dung bên trong */
+            border-radius: 8px;
+            font-family: Arial, sans-serif;
+            margin: auto;       /* căn giữa trên trang */
+        }
+
+        #page-camera img {
+            display: block;
+            max-width: 100%;    /* ảnh không vượt quá container */
+            height: auto;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+
 
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <h1 class="text-center">BLE & MQTT Config</h1>
-        <button class="btn btn-primary btn-block" id="toggleButton" onclick="toggleFunction()">SCAN</button>
-        
-        <h4>WiFi Configuration</h4>
-        <button class="btn btn-info btn-block" id="scanWifiBtn" onclick="scanWifi()">Scan WiFi Networks</button>
-        <!-- Popup Modal WiFi -->
-        <input type="hidden" id="SSID" />
-        <div id="selectedSSID" class="selected">-- Chưa chọn WiFi --</div>
-        <input type="password" id="Password" placeholder="Enter Password" class="form-control mb-2">
-        <!-- Nút "Kết nối" ban đầu bị vô hiệu hóa (disabled) -->
-        <button id="connectWifiBtn" onclick="ConnectWifi()" class="btn btn-success btn-block" disabled>Connect</button> 
+    <div class="container">       
+         <!-- trang chủ config wifi ESP32 / ESPCAM-->
+            <div id = "configWifi" class = "configWifi active">
+                <h1 class="text-center">BLE & MQTT Config</h1>
+                <button class="btn btn-primary btn-block" id="toggleButton" onclick="toggleFunction()">SCAN</button>
+                
+                <h4>WiFi Configuration</h4>
+                <button class="btn btn-info btn-block" id="scanWifiBtn" onclick="scanWifi()">Scan WiFi Networks</button>
+                
+                <input type="hidden" id="SSID" />
+                <div id="selectedSSID" class="selected">-- No WiFi Selected --</div>
+                <input type="password" id="Password" placeholder="Enter Password" class="form-control mb-2">
+                <!-- Nút "Kết nối" ban đầu bị vô hiệu hóa (disabled) -->
+                <button id="connectWifiBtn" onclick="ConnectWifi()" class="btn btn-success btn-block" disabled>Connect</button> 
+                <!-- Popup Modal WiFi -->
+                <div id="wifiModal" class="modal" style="display:none;">
+                <div class="modal-content">
+                    <span class="close" onclick="closeWifiModal()">&times;</span>
+                    <h2>Select WiFi</h2>
+                    <button onclick="forceRescanWifi()" class="btn btn-primary" style="margin-bottom: 10px;">🔄 Rescan</button>
 
-        <!-- Popup Modal WiFi -->
-        <div id="wifiModal" class="modal" style="display:none;">
-          <div class="modal-content">
-            <span class="close" onclick="closeWifiModal()">&times;</span>
-            <h2>Select WiFi</h2>
-            <button onclick="forceRescanWifi()" class="btn btn-primary" style="margin-bottom: 10px;">🔄 Rescan</button>
-
-            <div id="wifiListPopup">
-                <div class="scanning-indicator">
-                    <div class="loading-spinner"></div>
-                    Scanning WiFi...
+                    <div id="wifiListPopup">
+                        <div class="scanning-indicator">
+                            <div class="loading-spinner"></div>
+                            Scanning WiFi...
+                        </div>
+                    </div>
                 </div>
-            </div>
-          </div>
-        </div>
+                </div>
+
+                <h4>MQTT Broker Configuration</h4>
+                <input type ="text" id= "mqttServer" placeholder ="Enter MQTT Server" class="form-control mb-2">
+                <input type = "text" id="mqttPort" placeholder="Enter MQTT Port" class="form-control mb-2">
+                <input type="text" id="username" placeholder="Enter Broker Username" class="form-control mb-2">
+                <input type="password" id="brokerPassword" placeholder="Enter Broker Password" class="form-control mb-2">
+                <!-- Nút "Kết nối" ban đầu bị vô hiệu hóa (disabled) -->
+                <button id="connectMqttBtn" onclick="ConnectMqtt()" class="btn btn-success btn-block" disabled>Connect</button> 
+                
+                    <h4>MQTT Publish</h4>
+                    <input type="text" id="mqttTopic" placeholder="Enter Topic" class="form-control mb-2">
+                    <input type="text" id="mqttMessage" placeholder="Enter Message" class="form-control mb-2">
+                <button id="sendMqttBtn" onclick="publishMessage()" class="btn btn-warning btn-block" disabled>Send</button>
+
+                <h4>MQTT Counting</h4>
+                <input type="text" id="interval" placeholder="Enter interval" class="form-control mb-2">
+                <button id="sendInterval" onclick="interval()" class="btn btn-warning btn-block" disabled>Set_Interval</button>
+                <button id = "count" onclick = "counting()" class = "btn btn-warning btn-block"disabled>Count</button>
+                <button id="reset" onclick="resetCounting()" class="btn btn-warning btn-block" disabled>Reset</button>
+                <button id="pause" onclick="pause()" class="btn btn-warning btn-block" disabled>Pause</button>
+                
+                <h4 class = "text-center" > Config Camera Page</h4>
+                <button id = "switchPage"  onclick = "switchPage('page-camera')" class = "btn-camera">Config Camera</button>
+                
+                <h4>Interaction WebBLE & ESP32</h4>
+                <div id="bleExchangeDisplay" style="
+                    background-color: #f3ec89;
+                    color: #000;
+                    border: 1px solid #fcfcfc;
+                    border-radius: 8px;
+                    padding: 10px;
+                    height: 100px;
+                    overflow-y: auto;
+                    font-family: monospace;
+                    font-size: 13px;
+                "></div>
+                
+                <h4>Terminal</h4>
+                    <textarea id="textareaNotification" readonly></textarea>
         
-       <h4>MQTT Broker Configuration</h4>
+        </div>
 
-       <input type ="text" id= "mqttServer" placeholder ="Enter MQTT Server" class="form-control mb-2">
-       <input type = "text" id="mqttPort" placeholder="Enter MQTT Port" class="form-control mb-2">
-       <input type="text" id="username" placeholder="Enter Broker Username" class="form-control mb-2">
-       <input type="password" id="brokerPassword" placeholder="Enter Broker Password" class="form-control mb-2">
-       <!-- Nút "Kết nối" ban đầu bị vô hiệu hóa (disabled) -->
-       <button id="connectMqttBtn" onclick="ConnectMqtt()" class="btn btn-success btn-block" disabled>Connect</button> 
-       
-        <h4>MQTT Publish</h4>
-        <input type="text" id="mqttTopic" placeholder="Enter Topic" class="form-control mb-2">
-        <input type="text" id="mqttMessage" placeholder="Enter Message" class="form-control mb-2">
-       <button id="sendMqttBtn" onclick="publishMessage()" class="btn btn-warning btn-block" disabled>Send</button>
+            <!-- Trang config camera-->
+            <div id="page-camera" class="page-camera">
+            <h1 class="text-center">ESP32-CAM Configuration</h1>
+            
+            <label>Camera Resolution :</label>
+            <select id="cameraResolution">
+                <option value="320x240">320x240</option>
+                <option value="640x480">640x480</option>
+                <option value="1280x720">1280x720</option>
+                <option value="1920x1080">1920x1080</option>
+            </select>
+            <br>
 
-       <h4>MQTT Counting</h4>
-       <input type="text" id="interval" placeholder="Enter interval" class="form-control mb-2">
-       <button id="sendInterval" onclick="interval()" class="btn btn-warning btn-block" disabled>Set_Interval</button>
-       <button id = "count" onclick = "counting()" class = "btn btn-warning btn-block"disabled>Count</button>
-       <button id="reset" onclick="resetCounting()" class="btn btn-warning btn-block" disabled>Reset</button>
-       <button id="pause" onclick="pause()" class="btn btn-warning btn-block" disabled>Pause</button>
-       <h4>Interaction WebBLE & ESP32</h4>
-       <div id="bleExchangeDisplay" style="
-           background-color: #fff;
-           color: #000;
-           border: 1px solid #ccc;
-           border-radius: 8px;
-           padding: 10px;
-           height: 100px;
-           overflow-y: auto;
-           font-family: monospace;
-           font-size: 13px;
-       "></div>
-       
-        <h4>Terminal</h4>
-        <textarea id="textareaNotification" readonly></textarea>
+            <label>Capture Mode :</label>
+            <select id="captureMode">
+                <option value="manual">Manual Capture</option>
+                <option value="interval">Timed Capture</option>
+                
+            </select>
+            <br> 
+
+            <label>Brightness :</label>
+            <input type="range" id="brightness" min="-10" max="10" value="0">
+            <br> 
+
+            <button onclick="capturePhoto()">Take Photo</button>
+            <br>
+            <h3>Latest Photo :</h3>
+            <img id="latestPhoto" src="https://bhvgejarhxulboorwljd.supabase.co/storage/v1/object/public/espfile/espCamImage/QuocKi.jpg" alt="Latest Photo" style="max-width:100%; border:1px solid #ccc;">
+            
+
+            <button onclick="switchPage('configWifi')">Return Wifi Configuration</button>
+            </div>
+
     </div>
 
+    
     <script>
         var deviceName = 'BLE_Wifi';
         var bleService = "0000181f-0000-1000-8000-00805f9b34fb";
@@ -191,6 +355,42 @@
         let receivingWifiList = false;
         let wifiNetworks = [];
         let isScanning = false;
+        let currentPage = "configWifi"; // Trang hiện tại
+
+        function capturePhoto() {
+            if (!dev || !dev.gatt.connected) {
+                log("BLE not connected. Please connect to BLE device first!");
+                return;
+            }
+            const resolution = document.getElementById("cameraResolution").value;
+            const brightness = document.getElementById("brightness").value;
+            const mode = document.getElementById("captureMode").value;
+
+            const command = `CAPTURE:${resolution};${brightness};${mode}`;
+            TX.writeValue(new TextEncoder().encode(command))
+                .then(() => log(`Capture command sent: ${command}`))
+                .catch(error => log("Error sending capture command: " + error));
+            logBLE("TX", "Send", command);
+        }
+        // Hàm chuyển đổi trang
+        function switchPage(targetId) {
+            if (targetId === currentPage) return;
+
+            const current = document.getElementById(currentPage);
+            const target = document.getElementById(targetId);
+
+            // Ẩn trang hiện tại
+            current.classList.remove('active');
+            current.style.display = 'none';
+
+            // Hiện trang mới
+            target.classList.add('active');
+            target.style.display = 'block';
+
+            currentPage = targetId;
+        }
+
+
         
         // Kết nối MQTT WebSocket
         var mqttClient = mqtt.connect('ws://192.168.1.34:9001');
