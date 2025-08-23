@@ -286,7 +286,7 @@
                 <button id="pause" onclick="pause()" class="btn btn-warning btn-block" disabled>Pause</button>
                 
                 <h4 class = "text-center" > Config Camera Page</h4>
-                <button id = "switchPage"  onclick = "switchPage('page-camera')" class = "btn-camera">Config Camera</button>
+                <button id = "switchPage"  onclick = "openCameraConfigPage()" class = "btn-camera">Config Camera</button>
                 
                 <h4>Interaction WebBLE & ESP32</h4>
                 <div id="bleExchangeDisplay" style="
@@ -334,8 +334,10 @@
             <button onclick="capturePhoto()">Take Photo</button>
             <br>
             <h3>Latest Photo :</h3>
-            <img id="latestPhoto" src="https://bhvgejarhxulboorwljd.supabase.co/storage/v1/object/public/espfile/espCamImage/QuocKi.jpg" alt="Latest Photo" style="max-width:100%; border:1px solid #ccc;">
-            
+            <img id="latestPhoto" 
+                src="https://bhvgejarhxulboorwljd.supabase.co/storage/v1/object/public/espfile/espCamImage/esp32cam.jpg" 
+                alt="Latest Photo" 
+                style="width:auto; height:400px; border:1px solid #ccc; border-radius:8px;">
 
             <button onclick="switchPage('configWifi')">Return Wifi Configuration</button>
             </div>
@@ -357,6 +359,13 @@
         let isScanning = false;
         let currentPage = "configWifi"; // Trang hiện tại
 
+        setInterval(() => {
+            const img = document.getElementById("latestPhoto");
+            // Thêm timestamp để tránh bị cache
+            img.src = "https://bhvgejarhxulboorwljd.supabase.co/storage/v1/object/public/espfile/espCamImage/esp32cam.jpg?ts=" + new Date().getTime();
+            }, 500); // cập nhật mỗi 3 giây
+
+
         function capturePhoto() {
             if (!dev || !dev.gatt.connected) {
                 log("BLE not connected. Please connect to BLE device first!");
@@ -366,7 +375,7 @@
             const brightness = document.getElementById("brightness").value;
             const mode = document.getElementById("captureMode").value;
 
-            const command = `CAPTURE:${resolution};${brightness};${mode}`;
+            const command = 'CAPTURE';
             TX.writeValue(new TextEncoder().encode(command))
                 .then(() => log(`Capture command sent: ${command}`))
                 .catch(error => log("Error sending capture command: " + error));
@@ -390,6 +399,21 @@
             currentPage = targetId;
         }
 
+        function openCameraConfigPage() {
+            // Gửi lệnh BLE trước
+            if (TX && dev && dev.gatt.connected) {
+                const command = "ESP32_CAM_CONFIG";
+                TX.writeValue(new TextEncoder().encode(command))
+                    .then(() => log(`Command sent: ${command}`))
+                    .catch(error => log("Error sending ESP32_CAM_CONFIG: " + error));
+                logBLE("TX", "Send", command);
+            } else {
+                log("BLE not connected. Please connect first!");
+            }
+
+            // Chuyển sang trang config camera
+            switchPage('page-camera');
+        }
 
         
         // Kết nối MQTT WebSocket
